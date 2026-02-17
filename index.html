@@ -2,94 +2,335 @@
 <html lang="et">
 <head>
 <meta charset="UTF-8">
-<title>Pommide mäng</title>
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+<title>Punase Nupu Mäng</title>
 <style>
-  body { margin:0; background:#000; color:#fff; font-family:sans-serif; text-align:center; }
-  canvas { background:#111; display:block; margin:10px auto; }
+body{
+  margin:0;
+  background:black;
+  color:white;
+  font-family:sans-serif;
+  overflow:hidden;
+  touch-action:none;
+}
+
+#ui{
+  position:fixed;
+  top:10px;
+  left:10px;
+  z-index:10;
+}
+
+#counter{font-size:22px;}
+#lives{font-size:18px;margin-top:5px;}
+
+.btn{
+  position:absolute;
+  border-radius:50%;
+  border:none;
+}
+
+#realButton{
+  background:red;
+  z-index:5;
+}
+
+.clone{
+  background:red;
+  opacity:0.4;
+  pointer-events:auto;
+}
+
+canvas{
+  position:absolute;
+  top:0;
+  left:0;
+  z-index:0;
+}
 </style>
 </head>
 <body>
 
-<h2>Punktid: <span id="score">0</span></h2>
-<p>Vajuta 1 / 2 / 3 (100, 200, 300 punkti)</p>
-<canvas id="c" width="800" height="400"></canvas>
+<div id="ui">
+  <div id="counter">Vajutused: 0</div>
+  <div id="lives"></div>
+</div>
+
+<button id="realButton" class="btn"></button>
+<canvas id="canvas"></canvas>
 
 <script>
-const c = document.getElementById("c");
-const ctx = c.getContext("2d");
-const scoreEl = document.getElementById("score");
+const realBtn=document.getElementById("realButton");
+const counterEl=document.getElementById("counter");
+const livesEl=document.getElementById("lives");
+const canvas=document.getElementById("canvas");
+const ctx=canvas.getContext("2d");
 
-let score = 0;
-let collisionsOn = false;
+function resize(){
+  canvas.width=window.innerWidth;
+  canvas.height=window.innerHeight;
+}
+resize();
+window.addEventListener("resize",resize);
 
-const bombs = [];
-const COUNT = 50; // pommide arv
+let count=0;
+let lives=0;
+let bouncing=false;
+let vx=3,vy=3;
+let size=100;
 
-for (let i = 0; i < COUNT; i++) {
-  bombs.push({
-    x: Math.random() * c.width,
-    y: Math.random() * c.height,
-    vx: (Math.random() - 0.5) * 4,
-    vy: (Math.random() - 0.5) * 4,
-    r: 8
+let bombs=[];
+let missiles=[];
+let clones=[];
+
+let cloneMode=false;
+let teleportMode=false;
+let darknessMode=false;
+
+let player={x:0,y:0,active:false};
+
+function setPlayer(x,y){
+  player.x=x;
+  player.y=y;
+  player.active=true;
+}
+
+document.addEventListener("mousemove",e=>setPlayer(e.clientX,e.clientY));
+document.addEventListener("touchstart",e=>{
+  const t=e.touches[0];
+  setPlayer(t.clientX,t.clientY);
+});
+document.addEventListener("touchmove",e=>{
+  const t=e.touches[0];
+  setPlayer(t.clientX,t.clientY);
+});
+
+let bx=window.innerWidth/2-50;
+let by=window.innerHeight/2-50;
+
+function updateRealButton(){
+  realBtn.style.width=size+"px";
+  realBtn.style.height=size+"px";
+  realBtn.style.left=bx+"px";
+  realBtn.style.top=by+"px";
+}
+
+updateRealButton();
+
+realBtn.addEventListener("click",()=>{
+
+  count++;
+  counterEl.textContent="Vajutused: "+count;
+
+  if(count>=100) bouncing=true;
+
+  if(count>=200 && lives===0){
+    lives=3;
+    livesEl.textContent="Elud: "+lives;
+    startBombSpawning();
+  }
+
+  if(count>=300) startMissiles();
+
+  if(count>=400 && !cloneMode){
+    activateCloneMode();
+  }
+
+  if(count>=500) teleportMode=true;
+  if(count>=550) darknessMode=true;
+
+  if(teleportMode) teleportAway();
+});
+
+function teleportAway(){
+  if(!player.active) return;
+
+  let angle=Math.random()*Math.PI*2;
+  let distance=80+Math.random()*40;
+
+  bx+=Math.cos(angle)*distance;
+  by+=Math.sin(angle)*distance;
+
+  bx=Math.max(0,Math.min(window.innerWidth-size,bx));
+  by=Math.max(0,Math.min(window.innerHeight-size,by));
+
+  updateRealButton();
+}
+
+function activateCloneMode(){
+  cloneMode=true;
+  size=60;
+  updateRealButton();
+
+  for(let i=0;i<3;i++){
+    const clone=document.createElement("button");
+    clone.className="btn clone";
+    clone.style.width=size+"px";
+    clone.style.height=size+"px";
+    document.body.appendChild(clone);
+
+    clone.addEventListener("click",e=>e.stopPropagation());
+
+    clones.push({
+      el:clone,
+      x:Math.random()*window.innerWidth,
+      y:Math.random()*window.innerHeight,
+      vx:(Math.random()-0.5)*6,
+      vy:(Math.random()-0.5)*6
+    });
+  }
+}
+
+function moveButton(){
+  if(!bouncing) return;
+
+  bx+=vx;
+  by+=vy;
+
+  if(bx<=0||bx>=window.innerWidth-size) vx*=-1;
+  if(by<=0||by>=window.innerHeight-size) vy*=-1;
+
+  updateRealButton();
+}
+
+function moveClones(){
+  clones.forEach(c=>{
+    c.x+=c.vx;
+    c.y+=c.vy;
+
+    if(c.x<=0||c.x>=window.innerWidth-size) c.vx*=-1;
+    if(c.y<=0||c.y>=window.innerHeight-size) c.vy*=-1;
+
+    c.el.style.left=c.x+"px";
+    c.el.style.top=c.y+"px";
   });
 }
 
-// Põrge pommide vahel
-function collide() {
-  for (let i = 0; i < bombs.length; i++) {
-    for (let j = i + 1; j < bombs.length; j++) {
-      const dx = bombs[i].x - bombs[j].x;
-      const dy = bombs[i].y - bombs[j].y;
-      const d = Math.hypot(dx, dy);
+/* BOMBS */
+function spawnBomb(){
+  bombs.push({
+    x:Math.random()*canvas.width,
+    y:Math.random()*canvas.height,
+    vx:(Math.random()-0.5)*4,
+    vy:(Math.random()-0.5)*4,
+    r:15
+  });
+}
 
-      if (d < bombs[i].r + bombs[j].r) {
-        bombs[i].vx *= -1;
-        bombs[i].vy *= -1;
-        bombs[j].vx *= -1;
-        bombs[j].vy *= -1;
-      }
+function startBombSpawning(){
+  setInterval(()=>{
+    if(count>=200) spawnBomb();
+  },2000);
+}
+
+/* MISSILES */
+let missileStarted=false;
+
+function spawnMissile(){
+  let side=Math.floor(Math.random()*4);
+  let x,y;
+
+  if(side===0){x=0;y=Math.random()*canvas.height;}
+  if(side===1){x=canvas.width;y=Math.random()*canvas.height;}
+  if(side===2){x=Math.random()*canvas.width;y=0;}
+  if(side===3){x=Math.random()*canvas.width;y=canvas.height;}
+
+  missiles.push({x,y,angle:0,speed:2,turnSpeed:0.03});
+}
+
+function startMissiles(){
+  if(missileStarted) return;
+  missileStarted=true;
+
+  setInterval(()=>{
+    if(count>=300) spawnMissile();
+  },3000);
+}
+
+/* UPDATE */
+function updateBombs(){
+  bombs.forEach((b,i)=>{
+    b.x+=b.vx;
+    b.y+=b.vy;
+
+    if(b.x<0||b.x>canvas.width) b.vx*=-1;
+    if(b.y<0||b.y>canvas.height) b.vy*=-1;
+
+    if(player.active && Math.hypot(b.x-player.x,b.y-player.y)<b.r){
+      loseLife();
+      bombs.splice(i,1);
+    }
+
+    drawCircle(b.x,b.y,b.r,"orange");
+  });
+}
+
+function updateMissiles(){
+  missiles.forEach((m,i)=>{
+    if(player.active){
+      let target=Math.atan2(player.y-m.y,player.x-m.x);
+      let diff=Math.atan2(Math.sin(target-m.angle),Math.cos(target-m.angle));
+      if(diff>0)m.angle+=m.turnSpeed;
+      else m.angle-=m.turnSpeed;
+    }
+
+    m.x+=Math.cos(m.angle)*m.speed;
+    m.y+=Math.sin(m.angle)*m.speed;
+
+    if(player.active && Math.hypot(m.x-player.x,m.y-player.y)<15){
+      loseLife();
+      missiles.splice(i,1);
+    }
+
+    drawCircle(m.x,m.y,10,"lime");
+  });
+}
+
+function loseLife(){
+  if(lives>0){
+    lives--;
+    livesEl.textContent="Elud: "+lives;
+    if(lives<=0){
+      alert("Game Over!");
+      location.reload();
     }
   }
 }
 
-// Mängu loop
-function loop() {
-  ctx.clearRect(0,0,c.width,c.height);
+function drawCircle(x,y,r,color){
+  ctx.beginPath();
+  ctx.arc(x,y,r,0,Math.PI*2);
+  ctx.fillStyle=color;
+  ctx.fill();
+}
 
-  bombs.forEach(b => {
-    b.x += b.vx;
-    b.y += b.vy;
+function drawDarkness(){
+  ctx.fillStyle="black";
+  ctx.fillRect(0,0,canvas.width,canvas.height);
 
-    if (b.x < b.r || b.x > c.width - b.r) b.vx *= -1;
-    if (b.y < b.r || b.y > c.height - b.r) b.vy *= -1;
-
+  if(player.active){
+    ctx.globalCompositeOperation="destination-out";
     ctx.beginPath();
-    ctx.arc(b.x,b.y,b.r,0,Math.PI*2);
-    ctx.fillStyle = "red";
+    ctx.arc(player.x,player.y,80,0,Math.PI*2);
     ctx.fill();
-  });
+    ctx.globalCompositeOperation="source-over";
+  }
+}
 
-  if (collisionsOn) collide();
+function loop(){
+  ctx.clearRect(0,0,canvas.width,canvas.height);
+
+  moveButton();
+  if(cloneMode) moveClones();
+  if(count>=200) updateBombs();
+  if(count>=300) updateMissiles();
+
+  if(darknessMode) drawDarkness();
 
   requestAnimationFrame(loop);
 }
 
 loop();
-
-// Punktide lisamine 1/2/3 klahvidega
-document.addEventListener("keydown", e => {
-  if (e.key === "1") score += 100;
-  if (e.key === "2") score += 200;
-  if (e.key === "3") score += 300;
-
-  scoreEl.textContent = score;
-
-  if (score >= 300) {
-    collisionsOn = true;
-  }
-});
 </script>
-
 </body>
 </html>
