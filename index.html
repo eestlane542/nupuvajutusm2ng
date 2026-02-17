@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
-<title>Punase Nupu Mäng</title>
+<title>Punase Nupu Mäng + Cheat</title>
 
 <style>
 body{
@@ -108,7 +108,7 @@ let lives=0;
 let maxLives=5;
 
 let bouncing=false;
-let vx=1.8, vy=1.8;
+let vx=1.2, vy=1.2;
 let size=100;
 
 let bombs=[];
@@ -122,16 +122,24 @@ let missileStarted=false;
 
 let player={x:0,y:0,active:false};
 
-/* ---------- START SYSTEM ---------- */
+/* ---------- START / CHEAT SYSTEM ---------- */
 
 startInput.addEventListener("keydown",e=>{
   if(e.key==="Enter"){
-    if(startInput.value==="start"){
+    const code=startInput.value.trim().toLowerCase();
+    if(code==="start"){
       beginGame(0);
     }
-    if(startInput.value==="start...-564454"){
+    else if(code==="start...-564454"){
       beginGame(550);
     }
+    else if(code==="tuunikalaviiner"){
+      count+=10;
+      counterEl.textContent="Vajutused: "+count;
+      // käivitame tasemed, kui punktid ületavad piirid
+      checkLevels();
+    }
+    startInput.value="";
   }
 });
 
@@ -143,14 +151,21 @@ function beginGame(startScore){
   startScreen.style.display="none";
   realBtn.style.display="block";
 
+  checkLevels();
+}
+
+/* ---------- TASANDITE KONTROLL ---------- */
+function checkLevels(){
   if(count>=100) bouncing=true;
-  if(count>=200){ lives=3; startBombSpawning(); }
+  if(count>=200 && lives===0){
+    lives=3;
+    livesEl.textContent="Elud: "+lives;
+    startBombSpawning();
+  }
   if(count>=300) startMissiles();
-  if(count>=400) activateCloneMode();
+  if(count>=400 && !cloneMode) activateCloneMode();
   if(count>=500) teleportMode=true;
   if(count>=550) darknessMode=true;
-
-  livesEl.textContent="Elud: "+lives;
 }
 
 /* ---------- INPUT ---------- */
@@ -187,38 +202,19 @@ updateRealButton();
 realBtn.addEventListener("click",()=>{
   count++;
   counterEl.textContent="Vajutused: "+count;
-
-  if(count>=100) bouncing=true;
-
-  if(count>=200 && lives===0){
-    lives=3;
-    startBombSpawning();
-  }
-
-  if(count>=300) startMissiles();
-  if(count>=400 && !cloneMode) activateCloneMode();
-  if(count>=500) teleportMode=true;
-  if(count>=550) darknessMode=true;
-
-  if(teleportMode) teleportAway();
-
-  livesEl.textContent="Elud: "+lives;
+  checkLevels();
 });
 
 /* ---------- TELEPORT ---------- */
 
 function teleportAway(){
   if(!player.active) return;
-
   let angle=Math.random()*Math.PI*2;
-  let distance=80+Math.random()*40;
-
+  let distance=60+Math.random()*30;
   bx+=Math.cos(angle)*distance;
   by+=Math.sin(angle)*distance;
-
   bx=Math.max(0,Math.min(window.innerWidth-size,bx));
   by=Math.max(0,Math.min(window.innerHeight-size,by));
-
   updateRealButton();
 }
 
@@ -228,7 +224,6 @@ function activateCloneMode(){
   cloneMode=true;
   size=60;
   updateRealButton();
-
   for(let i=0;i<3;i++){
     createClone();
   }
@@ -245,8 +240,8 @@ function createClone(){
     el:clone,
     x:Math.random()*window.innerWidth,
     y:Math.random()*window.innerHeight,
-    vx:(Math.random()-0.5)*4,
-    vy:(Math.random()-0.5)*4
+    vx:(Math.random()-0.5)*2,
+    vy:(Math.random()-0.5)*2
   };
 
   clone.addEventListener("click",()=>{
@@ -265,10 +260,8 @@ function moveClones(){
   clones.forEach(c=>{
     c.x+=c.vx;
     c.y+=c.vy;
-
     if(c.x<=0||c.x>=window.innerWidth-size) c.vx*=-1;
     if(c.y<=0||c.y>=window.innerHeight-size) c.vy*=-1;
-
     c.el.style.left=c.x+"px";
     c.el.style.top=c.y+"px";
   });
@@ -278,13 +271,10 @@ function moveClones(){
 
 function moveButton(){
   if(!bouncing) return;
-
   bx+=vx;
   by+=vy;
-
   if(bx<=0||bx>=window.innerWidth-size) vx*=-1;
   if(by<=0||by>=window.innerHeight-size) vy*=-1;
-
   updateRealButton();
 }
 
@@ -294,8 +284,8 @@ function spawnBomb(){
   bombs.push({
     x:Math.random()*canvas.width,
     y:Math.random()*canvas.height,
-    vx:(Math.random()-0.5)*3,
-    vy:(Math.random()-0.5)*3,
+    vx:(Math.random()-0.5)*2,
+    vy:(Math.random()-0.5)*2,
     r:15,
     born:Date.now(),
     life:60000
@@ -316,18 +306,14 @@ function updateBombs(){
       bombs.splice(i,1);
       return;
     }
-
     b.x+=b.vx;
     b.y+=b.vy;
-
     if(b.x<0||b.x>canvas.width) b.vx*=-1;
     if(b.y<0||b.y>canvas.height) b.vy*=-1;
-
     if(player.active && Math.hypot(b.x-player.x,b.y-player.y)<b.r){
       loseLife();
       bombs.splice(i,1);
     }
-
     drawCircle(b.x,b.y,b.r,"orange");
   });
 }
@@ -337,19 +323,16 @@ function updateBombs(){
 function spawnMissile(){
   let side=Math.floor(Math.random()*4);
   let x,y;
-
   if(side===0){x=0;y=Math.random()*canvas.height;}
   if(side===1){x=canvas.width;y=Math.random()*canvas.height;}
   if(side===2){x=Math.random()*canvas.width;y=0;}
   if(side===3){x=Math.random()*canvas.width;y=canvas.height;}
-
-  missiles.push({x,y,angle:0,speed:2,turnSpeed:0.03});
+  missiles.push({x,y,angle:0,speed:1.5,turnSpeed:0.02});
 }
 
 function startMissiles(){
   if(missileStarted) return;
   missileStarted=true;
-
   setInterval(()=>{
     if(count>=300) spawnMissile();
   },3000);
@@ -363,15 +346,12 @@ function updateMissiles(){
       if(diff>0)m.angle+=m.turnSpeed;
       else m.angle-=m.turnSpeed;
     }
-
     m.x+=Math.cos(m.angle)*m.speed;
     m.y+=Math.sin(m.angle)*m.speed;
-
     if(player.active && Math.hypot(m.x-player.x,m.y-player.y)<15){
       loseLife();
       missiles.splice(i,1);
     }
-
     drawCircle(m.x,m.y,10,"lime");
   });
 }
@@ -394,7 +374,6 @@ function loseLife(){
 function drawDarkness(){
   ctx.fillStyle="black";
   ctx.fillRect(0,0,canvas.width,canvas.height);
-
   if(player.active){
     ctx.globalCompositeOperation="destination-out";
     ctx.beginPath();
@@ -413,7 +392,6 @@ function drawCircle(x,y,r,color){
 
 function loop(){
   ctx.clearRect(0,0,canvas.width,canvas.height);
-
   if(started){
     moveButton();
     if(cloneMode) moveClones();
@@ -421,7 +399,6 @@ function loop(){
     if(count>=300) updateMissiles();
     if(darknessMode) drawDarkness();
   }
-
   requestAnimationFrame(loop);
 }
 
@@ -429,4 +406,3 @@ loop();
 </script>
 </body>
 </html>
-
