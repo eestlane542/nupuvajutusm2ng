@@ -76,7 +76,7 @@ window.addEventListener("resize",resize);
 let count=0;
 let lives=0;
 let bouncing=false;
-let vx=3,vy=3;
+let vx=1.8, vy=1.8;   // aeglasem nupp
 let size=100;
 
 let bombs=[];
@@ -114,7 +114,6 @@ function updateRealButton(){
   realBtn.style.left=bx+"px";
   realBtn.style.top=by+"px";
 }
-
 updateRealButton();
 
 realBtn.addEventListener("click",()=>{
@@ -175,8 +174,8 @@ function activateCloneMode(){
       el:clone,
       x:Math.random()*window.innerWidth,
       y:Math.random()*window.innerHeight,
-      vx:(Math.random()-0.5)*6,
-      vy:(Math.random()-0.5)*6
+      vx:(Math.random()-0.5)*4,
+      vy:(Math.random()-0.5)*4
     });
   }
 }
@@ -207,23 +206,53 @@ function moveClones(){
 }
 
 /* BOMBS */
+
 function spawnBomb(){
   bombs.push({
     x:Math.random()*canvas.width,
     y:Math.random()*canvas.height,
-    vx:(Math.random()-0.5)*4,
-    vy:(Math.random()-0.5)*4,
-    r:15
+    vx:(Math.random()-0.5)*3,
+    vy:(Math.random()-0.5)*3,
+    r:15,
+    born:Date.now(),
+    life:60000   // 60 sekundit
   });
 }
 
 function startBombSpawning(){
   setInterval(()=>{
-    if(count>=200) spawnBomb();
+    if(count>=200 && bombs.length < 20){
+      spawnBomb();
+    }
   },2000);
 }
 
+function updateBombs(){
+  bombs.forEach((b,i)=>{
+
+    if(Date.now()-b.born > b.life){
+      bombs.splice(i,1);
+      return;
+    }
+
+    b.x+=b.vx;
+    b.y+=b.vy;
+
+    if(b.x<0||b.x>canvas.width) b.vx*=-1;
+    if(b.y<0||b.y>canvas.height) b.vy*=-1;
+
+    if(player.active && Math.hypot(b.x-player.x,b.y-player.y)<b.r){
+      loseLife();
+      bombs.splice(i,1);
+      return;
+    }
+
+    drawCircle(b.x,b.y,b.r,"orange");
+  });
+}
+
 /* MISSILES */
+
 let missileStarted=false;
 
 function spawnMissile(){
@@ -247,26 +276,9 @@ function startMissiles(){
   },3000);
 }
 
-/* UPDATE */
-function updateBombs(){
-  bombs.forEach((b,i)=>{
-    b.x+=b.vx;
-    b.y+=b.vy;
-
-    if(b.x<0||b.x>canvas.width) b.vx*=-1;
-    if(b.y<0||b.y>canvas.height) b.vy*=-1;
-
-    if(player.active && Math.hypot(b.x-player.x,b.y-player.y)<b.r){
-      loseLife();
-      bombs.splice(i,1);
-    }
-
-    drawCircle(b.x,b.y,b.r,"orange");
-  });
-}
-
 function updateMissiles(){
   missiles.forEach((m,i)=>{
+
     if(player.active){
       let target=Math.atan2(player.y-m.y,player.x-m.x);
       let diff=Math.atan2(Math.sin(target-m.angle),Math.cos(target-m.angle));
@@ -280,6 +292,7 @@ function updateMissiles(){
     if(player.active && Math.hypot(m.x-player.x,m.y-player.y)<15){
       loseLife();
       missiles.splice(i,1);
+      return;
     }
 
     drawCircle(m.x,m.y,10,"lime");
@@ -324,7 +337,6 @@ function loop(){
   if(cloneMode) moveClones();
   if(count>=200) updateBombs();
   if(count>=300) updateMissiles();
-
   if(darknessMode) drawDarkness();
 
   requestAnimationFrame(loop);
