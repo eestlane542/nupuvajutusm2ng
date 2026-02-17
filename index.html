@@ -4,6 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
 <title>Punase Nupu Mäng</title>
+
 <style>
 body{
   margin:0;
@@ -12,6 +13,24 @@ body{
   font-family:sans-serif;
   overflow:hidden;
   touch-action:none;
+  user-select:none;
+}
+
+#startScreen{
+  position:fixed;
+  inset:0;
+  background:black;
+  display:flex;
+  flex-direction:column;
+  align-items:center;
+  justify-content:center;
+  z-index:100;
+}
+
+#startInput{
+  padding:10px;
+  font-size:18px;
+  text-align:center;
 }
 
 #ui{
@@ -19,6 +38,7 @@ body{
   top:10px;
   left:10px;
   z-index:10;
+  pointer-events:none;
 }
 
 #counter{font-size:22px;}
@@ -36,9 +56,8 @@ body{
 }
 
 .clone{
-  background:red;
-  opacity:0.4;
-  pointer-events:auto;
+  background:cyan;
+  opacity:0.6;
 }
 
 canvas{
@@ -51,15 +70,23 @@ canvas{
 </head>
 <body>
 
+<div id="startScreen">
+  <h2>Sisesta kood</h2>
+  <input id="startInput" placeholder="Kirjuta start..." />
+</div>
+
 <div id="ui">
   <div id="counter">Vajutused: 0</div>
   <div id="lives"></div>
 </div>
 
-<button id="realButton" class="btn"></button>
+<button id="realButton" class="btn" style="display:none;"></button>
 <canvas id="canvas"></canvas>
 
 <script>
+const startScreen=document.getElementById("startScreen");
+const startInput=document.getElementById("startInput");
+
 const realBtn=document.getElementById("realButton");
 const counterEl=document.getElementById("counter");
 const livesEl=document.getElementById("lives");
@@ -73,10 +100,15 @@ function resize(){
 resize();
 window.addEventListener("resize",resize);
 
+/* ---------- GAME STATE ---------- */
+
+let started=false;
 let count=0;
 let lives=0;
+let maxLives=5;
+
 let bouncing=false;
-let vx=1.8, vy=1.8;   // aeglasem nupp
+let vx=1.8, vy=1.8;
 let size=100;
 
 let bombs=[];
@@ -86,8 +118,42 @@ let clones=[];
 let cloneMode=false;
 let teleportMode=false;
 let darknessMode=false;
+let missileStarted=false;
 
 let player={x:0,y:0,active:false};
+
+/* ---------- START SYSTEM ---------- */
+
+startInput.addEventListener("keydown",e=>{
+  if(e.key==="Enter"){
+    if(startInput.value==="start"){
+      beginGame(0);
+    }
+    if(startInput.value==="start...-564454"){
+      beginGame(550);
+    }
+  }
+});
+
+function beginGame(startScore){
+  started=true;
+  count=startScore;
+  counterEl.textContent="Vajutused: "+count;
+
+  startScreen.style.display="none";
+  realBtn.style.display="block";
+
+  if(count>=100) bouncing=true;
+  if(count>=200){ lives=3; startBombSpawning(); }
+  if(count>=300) startMissiles();
+  if(count>=400) activateCloneMode();
+  if(count>=500) teleportMode=true;
+  if(count>=550) darknessMode=true;
+
+  livesEl.textContent="Elud: "+lives;
+}
+
+/* ---------- INPUT ---------- */
 
 function setPlayer(x,y){
   player.x=x;
@@ -105,6 +171,8 @@ document.addEventListener("touchmove",e=>{
   setPlayer(t.clientX,t.clientY);
 });
 
+/* ---------- BUTTON ---------- */
+
 let bx=window.innerWidth/2-50;
 let by=window.innerHeight/2-50;
 
@@ -117,7 +185,6 @@ function updateRealButton(){
 updateRealButton();
 
 realBtn.addEventListener("click",()=>{
-
   count++;
   counterEl.textContent="Vajutused: "+count;
 
@@ -125,21 +192,20 @@ realBtn.addEventListener("click",()=>{
 
   if(count>=200 && lives===0){
     lives=3;
-    livesEl.textContent="Elud: "+lives;
     startBombSpawning();
   }
 
   if(count>=300) startMissiles();
-
-  if(count>=400 && !cloneMode){
-    activateCloneMode();
-  }
-
+  if(count>=400 && !cloneMode) activateCloneMode();
   if(count>=500) teleportMode=true;
   if(count>=550) darknessMode=true;
 
   if(teleportMode) teleportAway();
+
+  livesEl.textContent="Elud: "+lives;
 });
+
+/* ---------- TELEPORT ---------- */
 
 function teleportAway(){
   if(!player.active) return;
@@ -156,40 +222,43 @@ function teleportAway(){
   updateRealButton();
 }
 
+/* ---------- HEALING CLONES ---------- */
+
 function activateCloneMode(){
   cloneMode=true;
   size=60;
   updateRealButton();
 
   for(let i=0;i<3;i++){
-    const clone=document.createElement("button");
-    clone.className="btn clone";
-    clone.style.width=size+"px";
-    clone.style.height=size+"px";
-    document.body.appendChild(clone);
-
-    clone.addEventListener("click",e=>e.stopPropagation());
-
-    clones.push({
-      el:clone,
-      x:Math.random()*window.innerWidth,
-      y:Math.random()*window.innerHeight,
-      vx:(Math.random()-0.5)*4,
-      vy:(Math.random()-0.5)*4
-    });
+    createClone();
   }
 }
 
-function moveButton(){
-  if(!bouncing) return;
+function createClone(){
+  const clone=document.createElement("button");
+  clone.className="btn clone";
+  clone.style.width=size+"px";
+  clone.style.height=size+"px";
+  document.body.appendChild(clone);
 
-  bx+=vx;
-  by+=vy;
+  let cloneObj={
+    el:clone,
+    x:Math.random()*window.innerWidth,
+    y:Math.random()*window.innerHeight,
+    vx:(Math.random()-0.5)*4,
+    vy:(Math.random()-0.5)*4
+  };
 
-  if(bx<=0||bx>=window.innerWidth-size) vx*=-1;
-  if(by<=0||by>=window.innerHeight-size) vy*=-1;
+  clone.addEventListener("click",()=>{
+    if(lives>0 && lives<maxLives){
+      lives++;
+      livesEl.textContent="Elud: "+lives;
+    }
+    clone.remove();
+    clones=clones.filter(c=>c!==cloneObj);
+  });
 
-  updateRealButton();
+  clones.push(cloneObj);
 }
 
 function moveClones(){
@@ -205,7 +274,21 @@ function moveClones(){
   });
 }
 
-/* BOMBS */
+/* ---------- MOVEMENT ---------- */
+
+function moveButton(){
+  if(!bouncing) return;
+
+  bx+=vx;
+  by+=vy;
+
+  if(bx<=0||bx>=window.innerWidth-size) vx*=-1;
+  if(by<=0||by>=window.innerHeight-size) vy*=-1;
+
+  updateRealButton();
+}
+
+/* ---------- BOMBS ---------- */
 
 function spawnBomb(){
   bombs.push({
@@ -215,13 +298,13 @@ function spawnBomb(){
     vy:(Math.random()-0.5)*3,
     r:15,
     born:Date.now(),
-    life:60000   // 60 sekundit
+    life:60000
   });
 }
 
 function startBombSpawning(){
   setInterval(()=>{
-    if(count>=200 && bombs.length < 20){
+    if(count>=200 && bombs.length<20){
       spawnBomb();
     }
   },2000);
@@ -229,8 +312,7 @@ function startBombSpawning(){
 
 function updateBombs(){
   bombs.forEach((b,i)=>{
-
-    if(Date.now()-b.born > b.life){
+    if(Date.now()-b.born>b.life){
       bombs.splice(i,1);
       return;
     }
@@ -244,16 +326,13 @@ function updateBombs(){
     if(player.active && Math.hypot(b.x-player.x,b.y-player.y)<b.r){
       loseLife();
       bombs.splice(i,1);
-      return;
     }
 
     drawCircle(b.x,b.y,b.r,"orange");
   });
 }
 
-/* MISSILES */
-
-let missileStarted=false;
+/* ---------- MISSILES ---------- */
 
 function spawnMissile(){
   let side=Math.floor(Math.random()*4);
@@ -278,7 +357,6 @@ function startMissiles(){
 
 function updateMissiles(){
   missiles.forEach((m,i)=>{
-
     if(player.active){
       let target=Math.atan2(player.y-m.y,player.x-m.x);
       let diff=Math.atan2(Math.sin(target-m.angle),Math.cos(target-m.angle));
@@ -292,12 +370,13 @@ function updateMissiles(){
     if(player.active && Math.hypot(m.x-player.x,m.y-player.y)<15){
       loseLife();
       missiles.splice(i,1);
-      return;
     }
 
     drawCircle(m.x,m.y,10,"lime");
   });
 }
+
+/* ---------- LIFE ---------- */
 
 function loseLife(){
   if(lives>0){
@@ -310,12 +389,7 @@ function loseLife(){
   }
 }
 
-function drawCircle(x,y,r,color){
-  ctx.beginPath();
-  ctx.arc(x,y,r,0,Math.PI*2);
-  ctx.fillStyle=color;
-  ctx.fill();
-}
+/* ---------- DARKNESS ---------- */
 
 function drawDarkness(){
   ctx.fillStyle="black";
@@ -330,14 +404,23 @@ function drawDarkness(){
   }
 }
 
+function drawCircle(x,y,r,color){
+  ctx.beginPath();
+  ctx.arc(x,y,r,0,Math.PI*2);
+  ctx.fillStyle=color;
+  ctx.fill();
+}
+
 function loop(){
   ctx.clearRect(0,0,canvas.width,canvas.height);
 
-  moveButton();
-  if(cloneMode) moveClones();
-  if(count>=200) updateBombs();
-  if(count>=300) updateMissiles();
-  if(darknessMode) drawDarkness();
+  if(started){
+    moveButton();
+    if(cloneMode) moveClones();
+    if(count>=200) updateBombs();
+    if(count>=300) updateMissiles();
+    if(darknessMode) drawDarkness();
+  }
 
   requestAnimationFrame(loop);
 }
@@ -346,3 +429,4 @@ loop();
 </script>
 </body>
 </html>
+
